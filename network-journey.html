@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>从 hub.hust.edu.cn 开始的一场旅行</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Custom Styles for Animation and Layout */
+        body {
+            background-color: #fdfbf7; /* Warm neutral background */
+            color: #333;
+            font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            scroll-behavior: smooth;
+        }
+
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 400px;
+        }
+
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+
+        /* Packet Animation Classes */
+        .packet {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background-color: #ef4444; /* red-500 */
+            border-radius: 50%;
+            display: none;
+            z-index: 50;
+            transition: all 1s ease-in-out;
+            box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+        }
+
+        .node-icon {
+            font-size: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 64px;
+            height: 64px;
+            background: white;
+            border-radius: 50%;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border: 2px solid #e5e7eb;
+            transition: transform 0.3s;
+            cursor: pointer;
+        }
+
+        .node-icon:hover {
+            transform: scale(1.1);
+            border-color: #3b82f6;
+        }
+
+        .active-step {
+            border-left: 4px solid #3b82f6;
+            background-color: #eff6ff;
+        }
+
+        /* Connection Lines */
+        .connection-line {
+            position: absolute;
+            background-color: #9ca3af;
+            z-index: 0;
+            transform-origin: 0 0;
+        }
+
+        /* Hide scrollbar for cleaner look */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+    <!-- Chosen Palette: Warm Neutral Background (#fdfbf7) with Academic Blue (#3b82f6) and Alert Red (#ef4444) accents. -->
+    <!-- Application Structure Plan:
+         Structure: A vertical "Scrollytelling" dashboard.
+         1. Header: Meta info (Class, Student ID).
+         2. Interactive Journey Map (Sticky Top): A visual representation of the network topology that persists or updates as users scroll.
+         3. Thematic Sections (The Steps):
+            - Scenario Overview: Introduction.
+            - Preparation (DHCP/ARP): Interactive buttons to simulate protocol exchanges.
+            - Discovery (DNS): Simulation of domain resolution.
+            - Connection (TCP/HTTP): Step-by-step handshake interaction.
+            - Routing (IP): Visualization of hops.
+         4. Summary: Key takeaway cards.
+         Why: This linear but interactive structure mimics the sequential nature of a network packet's journey, breaking down complex layers into digestible steps.
+    -->
+    <!-- Visualization & Content Choices:
+         1. Overview Topology: HTML/CSS Nodes (PC, Switch, Router, Server) -> Goal: Visualize physical path. -> Interaction: Hover for details. -> No SVG.
+         2. DHCP/ARP Stats: Bar Chart (Chart.js) -> Goal: Compare protocol overhead/timing. -> Interaction: Dynamic data update.
+         3. DNS Latency: Bar/Line Chart (Chart.js) -> Goal: Show difference between Cached vs Recursive lookup.
+         4. TCP State: Interactive Sequence Diagram (HTML/CSS) + Chart (Window Size) -> Goal: Visualize reliability.
+         5. IP Routing: Interactive Map & Step Log -> Goal: Show hop-by-hop logic.
+         Confirmation: NO SVG graphics used. NO Mermaid JS used.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+</head>
+<body class="text-gray-700">
+
+    <!-- Header Section -->
+    <header class="bg-white shadow-sm sticky top-0 z-40">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <div>
+                <h1 class="text-xl md:text-2xl font-bold text-gray-800">从 hub.hust.edu.cn 开始的一场旅行</h1>
+                <p class="text-sm text-gray-500">一次 HTTP 请求的网络之旅 | 计算机通信与网络课程报告</p>
+            </div>
+            <div class="text-right text-xs md:text-sm text-gray-600 hidden md:block">
+                <p>班级: 智科2301</p>
+                <p>学号: U202315547</p>
+                <p>姓名: 朱子谦</p>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <main class="container mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+        <!-- Left Column: Navigation & Topology Visualization (Sticky on Desktop) -->
+        <aside class="lg:col-span-4 lg:sticky lg:top-24 self-start space-y-6">
+
+            <!-- Navigation Menu -->
+            <div class="bg-white rounded-xl shadow-lg p-4">
+                <h3 class="font-bold text-gray-800 mb-2 border-b pb-2">旅程导航</h3>
+                <nav class="space-y-1" id="nav-menu">
+                    <button onclick="scrollToSection('sec-overview')" class="w-full text-left px-3 py-2 rounded hover:bg-gray-100 text-sm font-medium transition active-step" id="nav-overview">1. 场景与总览</button>
+                    <button onclick="scrollToSection('sec-dhcp')" class="w-full text-left px-3 py-2 rounded hover:bg-gray-100 text-sm font-medium transition" id="nav-dhcp">2. 准备: DHCP & ARP</button>
+                    <button onclick="scrollToSection('sec-dns')" class="w-full text-left px-3 py-2 rounded hover:bg-gray-100 text-sm font-medium transition" id="nav-dns">3. 寻址: DNS 解析</button>
+                    <button onclick="scrollToSection('sec-tcp')" class="w-full text-left px-3 py-2 rounded hover:bg-gray-100 text-sm font-medium transition" id="nav-tcp">4. 连接: TCP & HTTP</button>
+                    <button onclick="scrollToSection('sec-routing')" class="w-full text-left px-3 py-2 rounded hover:bg-gray-100 text-sm font-medium transition" id="nav-routing">5. 转发: IP 路由</button>
+                    <button onclick="scrollToSection('sec-summary')" class="w-full text-left px-3 py-2 rounded hover:bg-gray-100 text-sm font-medium transition" id="nav-summary">6. 总结回顾</button>
+                </nav>
+            </div>
+
+            <!-- Live Network Status Panel -->
+            <div class="bg-white rounded-xl shadow-lg p-6 relative overflow-hidden">
+                <h3 class="font-bold text-gray-800 mb-4">实时网络拓扑状态</h3>
+
+                <!-- Topology Container -->
+                <div class="relative h-64 w-full border border-gray-100 rounded-lg bg-gray-50 flex flex-col justify-between items-center py-4" id="topology-container">
+                    <!-- Nodes -->
+                    <div class="flex justify-between w-full px-4 z-10">
+                        <div class="flex flex-col items-center group relative">
+                            <div class="node-icon text-blue-600" id="node-pc">💻</div>
+                            <span class="text-xs font-bold mt-1">本机 (PC)</span>
+                            <div class="absolute -top-10 bg-black text-white text-xs p-1 rounded opacity-0 group-hover:opacity-100 transition">Src IP: 0.0.0.0 (Init)</div>
+                        </div>
+                        <div class="flex flex-col items-center group relative">
+                            <div class="node-icon text-green-600" id="node-switch">🔄</div>
+                            <span class="text-xs font-bold mt-1">宿舍交换机</span>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-center w-full z-10">
+                        <div class="flex flex-col items-center group relative">
+                            <div class="node-icon text-orange-600" id="node-router">⚡</div>
+                            <span class="text-xs font-bold mt-1">校园网路由</span>
+                            <div class="absolute -top-10 bg-black text-white text-xs p-1 rounded opacity-0 group-hover:opacity-100 transition">Gateway: 192.168.1.1</div>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-center w-full z-10">
+                        <div class="flex flex-col items-center group relative">
+                            <div class="node-icon text-purple-600" id="node-server">🌐</div>
+                            <span class="text-xs font-bold mt-1">HUB服务器</span>
+                            <div class="absolute -top-10 bg-black text-white text-xs p-1 rounded opacity-0 group-hover:opacity-100 transition">Dest IP: 202.114.x.x</div>
+                        </div>
+                    </div>
+
+                    <!-- CSS Cables (Visual lines) -->
+                    <div class="absolute top-12 left-10 w-1/3 h-24 border-l-2 border-b-2 border-gray-300 rounded-bl-3xl"></div> <!-- PC to Router area -->
+                    <div class="absolute top-12 right-10 w-1/3 h-24 border-r-2 border-b-2 border-gray-300 rounded-br-3xl"></div> <!-- Switch logic simulation -->
+                    <div class="absolute bottom-12 left-1/2 w-0.5 h-16 bg-gray-300 transform -translate-x-1/2"></div> <!-- Router to Server -->
+
+                    <!-- Moving Packet -->
+                    <div id="packet-anim" class="packet top-12 left-8"></div>
+                </div>
+
+                <div class="mt-4 p-3 bg-gray-800 text-green-400 font-mono text-xs rounded h-24 overflow-y-auto" id="console-log">
+                    > 系统初始化完成...<br>
+                    > 等待用户操作...
+                </div>
+            </div>
+        </aside>
+
+        <!-- Right Column: Story Content -->
+        <article class="lg:col-span-8 space-y-12">
+
+            <!-- Section 1: Overview -->
+            <section id="sec-overview" class="bg-white rounded-xl shadow-sm p-6 md:p-8 border-l-4 border-blue-500">
+                <div class="mb-6">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-2">1. 场景与整体流程总览</h2>
+                    <p class="text-gray-600">
+                        想象一个普通的夜晚，你在宿舍打开笔记本电脑，连接上校园网。在浏览器地址栏输入
+                        <span class="bg-blue-100 text-blue-800 px-1 rounded font-mono">http://hub.hust.edu.cn</span>
+                        并按下回车。就在这一瞬间，数据开始了它的奇幻漂流。
+                    </p>
+                </div>
+
+                <div class="grid md:grid-cols-2 gap-6 items-center">
+                    <div>
+                        <ul class="space-y-4">
+                            <li class="flex items-start">
+                                <span class="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-blue-100 text-blue-600 rounded-full font-bold mr-3">1</span>
+                                <div>
+                                    <h4 class="font-bold">终端发起</h4>
+                                    <p class="text-sm text-gray-500">笔记本电脑准备发送请求。</p>
+                                </div>
+                            </li>
+                            <li class="flex items-start">
+                                <span class="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-green-100 text-green-600 rounded-full font-bold mr-3">2</span>
+                                <div>
+                                    <h4 class="font-bold">局域网传输</h4>
+                                    <p class="text-sm text-gray-500">经过宿舍交换机与网关路由器。</p>
+                                </div>
+                            </li>
+                            <li class="flex items-start">
+                                <span class="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-purple-100 text-purple-600 rounded-full font-bold mr-3">3</span>
+                                <div>
+                                    <h4 class="font-bold">广域网路由</h4>
+                                    <p class="text-sm text-gray-500">穿越运营商骨干网，直达服务器。</p>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="bg-blue-50 p-4 rounded-lg">
+                        <h4 class="font-bold text-center mb-4 text-blue-800">涉及核心协议栈</h4>
+                        <div class="flex flex-wrap gap-2 justify-center">
+                            <span class="px-3 py-1 bg-white border border-blue-200 rounded shadow-sm text-sm">HTTP (应用层)</span>
+                            <span class="px-3 py-1 bg-white border border-blue-200 rounded shadow-sm text-sm">DNS (应用层)</span>
+                            <span class="px-3 py-1 bg-white border border-blue-200 rounded shadow-sm text-sm">TCP (传输层)</span>
+                            <span class="px-3 py-1 bg-white border border-blue-200 rounded shadow-sm text-sm">IP (网络层)</span>
+                            <span class="px-3 py-1 bg-white border border-blue-200 rounded shadow-sm text-sm">ARP (链路层)</span>
+                            <span class="px-3 py-1 bg-white border border-blue-200 rounded shadow-sm text-sm">DHCP (应用/网络)</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section 2: DHCP & ARP -->
+            <section id="sec-dhcp" class="bg-white rounded-xl shadow-sm p-6 md:p-8">
+                <div class="mb-4">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-2">2. 上网前的准备：我是谁？我在哪？</h2>
+                    <p class="text-gray-600 mb-4">
+                        在发送任何网页请求前，电脑必须先获得合法的网络身份（IP）并找到走出宿舍大门的向导（网关 MAC）。
+                    </p>
+                </div>
+
+                <!-- Interactive DHCP/ARP Control -->
+                <div class="bg-gray-50 rounded-lg p-6 mb-6 border border-gray-200">
+                    <div class="flex gap-4 mb-4">
+                        <button onclick="runDHCP()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow transition flex items-center gap-2">
+                            <span>📡</span> 运行 DHCP
+                        </button>
+                        <button onclick="runARP()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow transition flex items-center gap-2">
+                            <span>📢</span> 运行 ARP
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div id="dhcp-status" class="bg-white p-3 rounded border text-sm text-gray-500">
+                            <strong>DHCP 状态:</strong> <span class="text-gray-400">未开始</span>
+                        </div>
+                        <div id="arp-status" class="bg-white p-3 rounded border text-sm text-gray-500">
+                            <strong>ARP 状态:</strong> <span class="text-gray-400">未开始</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Visualization of Protocol Steps -->
+                <div class="grid md:grid-cols-2 gap-8">
+                    <div>
+                        <h4 class="font-bold text-gray-700 mb-2">DHCP 四步交互 (DORA)</h4>
+                        <ol class="relative border-l border-gray-200 ml-3">
+                            <li class="mb-4 ml-4">
+                                <div class="absolute w-3 h-3 bg-gray-200 rounded-full mt-1.5 -left-1.5 border border-white" id="step-d"></div>
+                                <h3 class="text-sm font-semibold text-gray-900">1. Discover</h3>
+                                <p class="text-xs text-gray-500">"有人吗？我要个 IP！"</p>
+                            </li>
+                            <li class="mb-4 ml-4">
+                                <div class="absolute w-3 h-3 bg-gray-200 rounded-full mt-1.5 -left-1.5 border border-white" id="step-o"></div>
+                                <h3 class="text-sm font-semibold text-gray-900">2. Offer</h3>
+                                <p class="text-xs text-gray-500">"我这有个 IP 192.168.1.100，你要吗？"</p>
+                            </li>
+                            <li class="mb-4 ml-4">
+                                <div class="absolute w-3 h-3 bg-gray-200 rounded-full mt-1.5 -left-1.5 border border-white" id="step-r"></div>
+                                <h3 class="text-sm font-semibold text-gray-900">3. Request</h3>
+                                <p class="text-xs text-gray-500">"好的，我就要这个了！"</p>
+                            </li>
+                            <li class="ml-4">
+                                <div class="absolute w-3 h-3 bg-gray-200 rounded-full mt-1.5 -left-1.5 border border-white" id="step-a"></div>
+                                <h3 class="text-sm font-semibold text-gray-900">4. ACK</h3>
+                                <p class="text-xs text-gray-500">"确认分配，租期 2 小时。"</p>
+                            </li>
+                        </ol>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-center mb-2 text-gray-700">数据包耗时模拟 (ms)</h4>
+                        <!-- Chart Container -->
+                        <div class="chart-container h-48">
+                            <canvas id="dhcpArpChart"></canvas>
+                        </div>
+                        <p class="text-xs text-center text-gray-400 mt-2">ARP 仅在局域网内广播，速度极快。</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section 3: DNS -->
+            <section id="sec-dns" class="bg-white rounded-xl shadow-sm p-6 md:p-8">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">3. 找人：DNS 域名解析</h2>
+                <p class="text-gray-600 mb-6">
+                    浏览器不知道 "hub.hust.edu.cn" 在哪里，它需要查询 "电话本" (DNS 服务器) 来获取 IP 地址。
+                </p>
+
+                <div class="bg-indigo-50 p-6 rounded-xl border border-indigo-100 flex flex-col items-center">
+                    <div class="flex w-full max-w-md gap-2 mb-4">
+                        <input type="text" value="hub.hust.edu.cn" disabled class="flex-1 px-4 py-2 border rounded bg-white text-gray-600 cursor-not-allowed">
+                        <button onclick="runDNS()" id="dns-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded shadow transition">查询</button>
+                    </div>
+
+                    <div id="dns-process" class="w-full max-w-md space-y-2 hidden">
+                        <div class="flex justify-between text-xs text-gray-500">
+                            <span>本机缓存</span>
+                            <span>❌ Miss</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-1.5">
+                            <div class="bg-red-400 h-1.5 rounded-full" style="width: 20%"></div>
+                        </div>
+
+                        <div class="flex justify-between text-xs text-gray-500 pt-2">
+                            <span>本地 DNS (202.114.0.242)</span>
+                            <span class="text-blue-600 font-bold animate-pulse">Querying...</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-1.5">
+                            <div id="dns-bar" class="bg-blue-500 h-1.5 rounded-full transition-all duration-1000" style="width: 0%"></div>
+                        </div>
+
+                        <div id="dns-result" class="mt-4 p-3 bg-white border-l-4 border-green-500 shadow-sm hidden">
+                            <p class="text-sm font-bold text-gray-800">✅ 解析成功</p>
+                            <p class="text-xs text-gray-600">域名: hub.hust.edu.cn</p>
+                            <p class="text-xs text-gray-600">IP 地址: <span class="font-mono text-green-600">202.114.12.99</span></p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section 4: TCP & HTTP -->
+            <section id="sec-tcp" class="bg-white rounded-xl shadow-sm p-6 md:p-8">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">4. 建立可靠通道：TCP 三次握手</h2>
+                <p class="text-gray-600 mb-6">
+                    拿到 IP 后，不能直接发网页内容。必须先通过 TCP 协议建立一条可靠的逻辑连接。
+                    <span class="text-sm block text-gray-400 mt-1">特性：面向连接、可靠传输、流量控制。</span>
+                </p>
+
+                <div class="grid md:grid-cols-2 gap-8">
+                    <!-- Interaction Area -->
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center bg-gray-50 p-3 rounded border">
+                            <span class="font-bold text-blue-700">Client (本机)</span>
+                            <div class="h-px bg-gray-300 flex-1 mx-4"></div>
+                            <span class="font-bold text-purple-700">Server (HUST)</span>
+                        </div>
+
+                        <div id="handshake-viz" class="h-48 relative border-l border-r border-gray-100 mx-4">
+                            <!-- Arrows will be injected here by JS -->
+                            <div class="absolute top-0 left-0 w-full h-full flex flex-col justify-evenly opacity-10">
+                                <div class="w-full border-b border-dashed border-gray-200"></div>
+                                <div class="w-full border-b border-dashed border-gray-200"></div>
+                                <div class="w-full border-b border-dashed border-gray-200"></div>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-center gap-2">
+                            <button onclick="stepTCP()" id="tcp-btn" class="bg-gray-800 hover:bg-black text-white px-6 py-2 rounded shadow transition text-sm">
+                                ▶ 执行握手
+                            </button>
+                            <button onclick="sendHTTP()" id="http-btn" class="bg-orange-500 hover:bg-orange-600 text-white px-6 py-2 rounded shadow transition text-sm opacity-50 cursor-not-allowed" disabled>
+                                🌐 发送 HTTP GET
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Chart: TCP Window/State -->
+                    <div>
+                        <h4 class="font-bold text-center mb-2 text-gray-700">连接状态变化</h4>
+                        <div class="chart-container h-56">
+                            <canvas id="tcpChart"></canvas>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-2 p-2 bg-yellow-50 rounded">
+                            注：三次握手确保了双方的发送和接收能力都正常，并同步了初始序列号。
+                        </p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section 5: IP Routing -->
+            <section id="sec-routing" class="bg-white rounded-xl shadow-sm p-6 md:p-8">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">5. 漫漫长路：IP 分组转发</h2>
+                <p class="text-gray-600 mb-6">
+                    HTTP 请求报文被封装在 IP 数据报中，通过一个个路由器接力转发。每一跳都根据路由表决定下一步去向。
+                </p>
+
+                <div class="relative bg-gray-800 rounded-xl p-6 overflow-hidden">
+                    <!-- Map background simulation -->
+                    <div class="absolute inset-0 opacity-10">
+                        <div class="grid grid-cols-6 grid-rows-4 h-full w-full">
+                            <!-- Just visual grid lines -->
+                            <div class="border border-white"></div><div class="border border-white"></div><div class="border border-white"></div>
+                            <div class="border border-white"></div><div class="border border-white"></div><div class="border border-white"></div>
+                            <!-- ... repeat for effect ... -->
+                        </div>
+                    </div>
+
+                    <div class="relative z-10">
+                        <div class="flex flex-col md:flex-row justify-between items-center text-white space-y-4 md:space-y-0">
+                            <div class="text-center">
+                                <div class="text-2xl">💻</div>
+                                <div class="text-xs mt-1">本机</div>
+                            </div>
+                            <div class="text-gray-400 text-xl hidden md:block">→</div>
+
+                            <div class="text-center group cursor-pointer" onmouseover="showHop(1)">
+                                <div class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center mx-auto border-2 border-white">R1</div>
+                                <div class="text-xs mt-1">网关</div>
+                            </div>
+                            <div class="w-8 h-0.5 bg-gray-500 hidden md:block"></div>
+
+                            <div class="text-center group cursor-pointer" onmouseover="showHop(2)">
+                                <div class="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center mx-auto border-2 border-gray-400">R2</div>
+                                <div class="text-xs mt-1">核心</div>
+                            </div>
+                            <div class="w-8 h-0.5 bg-gray-500 hidden md:block"></div>
+
+                            <div class="text-center group cursor-pointer" onmouseover="showHop(3)">
+                                <div class="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center mx-auto border-2 border-gray-400">R3</div>
+                                <div class="text-xs mt-1">ISP</div>
+                            </div>
+                            <div class="text-gray-400 text-xl hidden md:block">→</div>
+
+                            <div class="text-center">
+                                <div class="text-2xl">🌐</div>
+                                <div class="text-xs mt-1">Server</div>
+                            </div>
+                        </div>
+
+                        <div id="hop-info" class="mt-6 bg-gray-900 p-4 rounded text-green-400 font-mono text-xs min-h-[80px]">
+                            Hover over a router node to see forwarding decision...
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-2 text-center text-xs text-gray-500">
+                    <div class="bg-gray-100 p-2 rounded">
+                        <strong>链路层</strong><br>MAC 寻址<br>(局域网)
+                    </div>
+                    <div class="bg-gray-100 p-2 rounded">
+                        <strong>网络层</strong><br>IP 选路<br>(跨网)
+                    </div>
+                    <div class="bg-gray-100 p-2 rounded">
+                        <strong>传输层</strong><br>TCP 可靠<br>(端到端)
+                    </div>
+                    <div class="bg-gray-100 p-2 rounded">
+                        <strong>应用层</strong><br>HTTP 服务<br>(交互)
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section 6: Summary -->
+            <section id="sec-summary" class="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl shadow-lg p-6 md:p-8 text-white">
+                <h2 class="text-2xl font-bold mb-6 border-b border-white/20 pb-4">6. 旅程总结：一次点击背后的奇迹</h2>
+
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div class="space-y-4">
+                        <div class="flex items-start">
+                            <div class="bg-white/20 p-2 rounded mr-3 text-lg">🔍</div>
+                            <div>
+                                <h4 class="font-bold">身份与定位</h4>
+                                <p class="text-sm text-blue-100">DHCP 分配 IP，ARP 获取 MAC，DNS 解析域名。这是通信的基础。</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start">
+                            <div class="bg-white/20 p-2 rounded mr-3 text-lg">🤝</div>
+                            <div>
+                                <h4 class="font-bold">可靠契约</h4>
+                                <p class="text-sm text-blue-100">TCP 三次握手建立了虚拟的可靠通道，确保数据不丢失、不乱序。</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="flex items-start">
+                            <div class="bg-white/20 p-2 rounded mr-3 text-lg">🛣️</div>
+                            <div>
+                                <h4 class="font-bold">接力传递</h4>
+                                <p class="text-sm text-blue-100">IP 协议指引数据包跨越无数路由器，最终抵达目标服务器。</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start">
+                            <div class="bg-white/20 p-2 rounded mr-3 text-lg">📦</div>
+                            <div>
+                                <h4 class="font-bold">分层协作</h4>
+                                <p class="text-sm text-blue-100">从物理信号到网页内容，TCP/IP 协议栈各层各司其职，共同完成使命。</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-8 text-center text-blue-200 text-sm">
+                    © 2025 计算机通信与网络课程报告展示
+                </div>
+            </section>
+
+        </article>
+    </main>
+
+    <script>
+        // State Management
+        const state = {
+            dhcpDone: false,
+            arpDone: false,
+            dnsResolved: false,
+            tcpStep: 0,
+            handshakeComplete: false
+        };
+
+        const consoleLog = document.getElementById('console-log');
+        const packet = document.getElementById('packet-anim');
+
+        // Helper: Log to console
+        function log(msg) {
+            const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+            consoleLog.innerHTML += `<div><span class="text-gray-500">[${time}]</span> ${msg}</div>`;
+            consoleLog.scrollTop = consoleLog.scrollHeight;
+        }
+
+        // Helper: Scroll
+        function scrollToSection(id) {
+            document.getElementById(id).scrollIntoView({ behavior: 'smooth' });
+
+            // Update Nav UI
+            document.querySelectorAll('#nav-menu button').forEach(btn => btn.classList.remove('active-step', 'text-blue-600'));
+            document.querySelector(`#nav-${id.replace('sec-', '')}`).classList.add('active-step', 'text-blue-600');
+        }
+
+        // --- CHART.JS INITIALIZATION ---
+
+        // 1. DHCP/ARP Chart
+        const ctxDhcp = document.getElementById('dhcpArpChart').getContext('2d');
+        const dhcpChart = new Chart(ctxDhcp, {
+            type: 'bar',
+            data: {
+                labels: ['ARP Request', 'DHCP Discover', 'DHCP Offer', 'DHCP ACK'],
+                datasets: [{
+                    label: '处理耗时 (ms)',
+                    data: [2, 15, 20, 18], // Dummy educational data
+                    backgroundColor: ['#10b981', '#3b82f6', '#60a5fa', '#2563eb'],
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true, title: {display: true, text: 'Time (ms)'} } }
+            }
+        });
+
+        // 2. TCP State Chart (Doughnut representation of Overhead vs Payload)
+        const ctxTcp = document.getElementById('tcpChart').getContext('2d');
+        const tcpChart = new Chart(ctxTcp, {
+            type: 'line',
+            data: {
+                labels: ['Initial', 'SYN', 'SYN-ACK', 'ACK', 'Data 1', 'Data 2'],
+                datasets: [{
+                    label: '拥塞窗口大小 (cwnd)',
+                    data: [0, 1, 1, 2, 4, 8], // Illustrating slow start
+                    borderColor: '#8b5cf6',
+                    tension: 0.1,
+                    fill: true,
+                    backgroundColor: 'rgba(139, 92, 246, 0.1)'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { y: { beginAtZero: true } }
+            }
+        });
+
+        // --- INTERACTION LOGIC ---
+
+        // Section 2: DHCP / ARP Logic
+        function runDHCP() {
+            if(state.dhcpDone) return;
+            log('Starting DHCP DORA process...');
+
+            // Visual sequence
+            const steps = ['step-d', 'step-o', 'step-r', 'step-a'];
+            steps.forEach((id, index) => {
+                setTimeout(() => {
+                    document.getElementById(id).classList.remove('bg-gray-200');
+                    document.getElementById(id).classList.add('bg-blue-500');
+                    log(`DHCP: ${id.replace('step-', '').toUpperCase()} packet processed.`);
+                }, index * 800);
+            });
+
+            setTimeout(() => {
+                state.dhcpDone = true;
+                document.getElementById('dhcp-status').innerHTML = '<strong>DHCP:</strong> <span class="text-green-600 font-bold">192.168.1.105</span>';
+                log('✅ IP Address Acquired.');
+                updateNodeInfo('node-pc', 'Src IP: 192.168.1.105');
+            }, 3200);
+        }
+
+        function runARP() {
+            if(!state.dhcpDone) {
+                alert('请先运行 DHCP 获取 IP 地址！');
+                return;
+            }
+            log('Broadcasting ARP Request: "Who is 192.168.1.1?"');
+
+            // Simulate packet animation in topology
+            packet.style.display = 'block';
+            packet.style.top = '48px';
+            packet.style.left = '32px';
+            packet.classList.add('bg-green-500');
+
+            // Move PC -> Switch
+            setTimeout(() => { packet.style.left = '80%'; }, 100);
+
+            setTimeout(() => {
+                log('ARP Reply: "192.168.1.1 is at aa:bb:cc:dd:ee:ff"');
+                document.getElementById('arp-status').innerHTML = '<strong>ARP:</strong> <span class="text-green-600 font-bold">Gateway MAC Found</span>';
+                state.arpDone = true;
+                packet.style.display = 'none';
+            }, 1500);
+        }
+
+        // Section 3: DNS Logic
+        function runDNS() {
+            if(!state.arpDone) {
+                log('⚠️ 请先完成第 2 步 (DHCP & ARP) 确保网络连通。');
+                return;
+            }
+            const btn = document.getElementById('dns-btn');
+            const processDiv = document.getElementById('dns-process');
+            const bar = document.getElementById('dns-bar');
+            const result = document.getElementById('dns-result');
+
+            btn.disabled = true;
+            btn.classList.add('opacity-50');
+            processDiv.classList.remove('hidden');
+            log('Sending DNS Query to Local DNS Server...');
+
+            // Animate bar
+            setTimeout(() => { bar.style.width = '100%'; }, 100);
+
+            setTimeout(() => {
+                result.classList.remove('hidden');
+                log('✅ DNS Resolved: hub.hust.edu.cn -> 202.114.12.99');
+                state.dnsResolved = true;
+                updateNodeInfo('node-server', 'Dest IP: 202.114.12.99');
+            }, 1500);
+        }
+
+        // Section 4: TCP Logic
+        function stepTCP() {
+            if(!state.dnsResolved) {
+                log('⚠️ 请先解析域名 (DNS) 获取目标 IP。');
+                return;
+            }
+            if(state.handshakeComplete) return;
+
+            const viz = document.getElementById('handshake-viz');
+            state.tcpStep++;
+
+            let html = '';
+            let msg = '';
+
+            if(state.tcpStep === 1) {
+                // SYN
+                html = `<div class="absolute top-4 left-0 w-full flex items-center text-blue-600 animate-pulse">
+                            <span class="text-xs font-bold mr-2">SYN, Seq=0</span>
+                            <div class="flex-1 h-0.5 bg-blue-400 relative"><div class="absolute right-0 -top-1 ">▶</div></div>
+                        </div>`;
+                msg = 'Client sends SYN (Sync Sequence)';
+            } else if(state.tcpStep === 2) {
+                // SYN-ACK
+                html = `<div class="absolute top-16 left-0 w-full flex items-center text-purple-600 animate-pulse">
+                            <div class="flex-1 h-0.5 bg-purple-400 relative"><div class="absolute left-0 -top-1">◀</div></div>
+                            <span class="text-xs font-bold ml-2">SYN, ACK, Seq=0</span>
+                        </div>`;
+                msg = 'Server sends SYN+ACK';
+            } else if(state.tcpStep === 3) {
+                // ACK
+                html = `<div class="absolute top-28 left-0 w-full flex items-center text-blue-600 animate-pulse">
+                             <span class="text-xs font-bold mr-2">ACK, Seq=1</span>
+                             <div class="flex-1 h-0.5 bg-blue-400 relative"><div class="absolute right-0 -top-1">▶</div></div>
+                        </div>`;
+                msg = 'Client sends ACK. Connection Established.';
+                state.handshakeComplete = true;
+                document.getElementById('tcp-btn').classList.add('hidden');
+                document.getElementById('http-btn').disabled = false;
+                document.getElementById('http-btn').classList.remove('opacity-50', 'cursor-not-allowed');
+                log('✅ TCP Connection Established (ESTABLISHED state).');
+            }
+
+            if(html) {
+                viz.insertAdjacentHTML('beforeend', html);
+                log(msg);
+            }
+        }
+
+        function sendHTTP() {
+            log('🚀 Sending HTTP GET /index.html');
+            const viz = document.getElementById('handshake-viz');
+            const html = `<div class="absolute bottom-4 left-0 w-full flex items-center text-orange-600 font-bold">
+                             <span class="text-xs mr-2">HTTP GET</span>
+                             <div class="flex-1 h-1 bg-orange-500 relative"><div class="absolute right-0 -top-1.5 text-lg">▶</div></div>
+                        </div>`;
+            viz.insertAdjacentHTML('beforeend', html);
+
+            // Trigger animation in topology
+            const p = document.getElementById('packet-anim');
+            p.style.display = 'block';
+            p.style.backgroundColor = '#f97316'; // orange
+            p.style.top = '48px';
+            p.style.left = '10%';
+
+            // Complex path animation
+            setTimeout(() => { p.style.left = '50%'; log('Packet at Gateway...'); }, 500);
+            setTimeout(() => { p.style.top = '70%'; log('Packet at ISP...'); }, 1000); // Move down
+            setTimeout(() => { p.style.left = '50%'; p.style.top = '180px'; log('Packet Arrived at Server.'); }, 1500); // Move to server
+
+            setTimeout(() => {
+                alert('🎉 页面加载成功！\nHTTP 200 OK\nContent-Type: text/html');
+            }, 2000);
+        }
+
+        // Section 5: Routing Interaction
+        function showHop(id) {
+            const info = document.getElementById('hop-info');
+            let text = '';
+            if(id === 1) text = '> <strong>R1 (网关):</strong> 目的 IP 202.114.12.99 不在本地子网。<br>查找路由表...<br>下一跳 -> 校园网核心 (Interface eth1)';
+            if(id === 2) text = '> <strong>R2 (核心):</strong> 匹配前缀 202.114.0.0/16。<br>下一跳 -> 教育网出口 R3 (Interface gig0/1)';
+            if(id === 3) text = '> <strong>R3 (ISP):</strong> 直连路由。<br>目的地址位于接口 fastEth0/0。<br>封装帧 -> 发送至服务器 MAC。';
+
+            info.innerHTML = text;
+        }
+
+        // Helper to update tooltip text
+        function updateNodeInfo(id, text) {
+            const el = document.querySelector(`#${id} .absolute`);
+            if(el) el.textContent = text;
+        }
+
+    </script>
+</body>
+</html>
